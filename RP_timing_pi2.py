@@ -97,6 +97,18 @@ TRACK1_OBST_LED  = 12                  # Player 1 – obstacle LED
 TRACK2_OBST_LED  = 16                  # Player 2 – obstacle LED
 
 # ══════════════════════════════════════════════
+#  RELAY LOGIC LEVEL
+# ══════════════════════════════════════════════
+# Most relay modules are ACTIVE-LOW: sending GPIO.LOW energizes
+# the relay (light ON), GPIO.HIGH de-energizes it (light OFF).
+# Set this to True if your relay boards are active-low (most are).
+# Set to False if you're driving bare LEDs directly (active-high).
+RELAY_ACTIVE_LOW = True
+
+LED_ON  = GPIO.LOW  if RELAY_ACTIVE_LOW else GPIO.HIGH
+LED_OFF = GPIO.HIGH if RELAY_ACTIVE_LOW else GPIO.LOW
+
+# ══════════════════════════════════════════════
 #  GPIO SETUP
 # ══════════════════════════════════════════════
 GPIO.setmode(GPIO.BCM)
@@ -104,15 +116,15 @@ GPIO.setwarnings(False)
 
 for pin in LED_PINS:
     GPIO.setup(pin, GPIO.OUT)
-    GPIO.output(pin, GPIO.LOW)
+    GPIO.output(pin, LED_OFF)
 
 GPIO.setup(STATUS_LED, GPIO.OUT)
-GPIO.output(STATUS_LED, GPIO.HIGH)
+GPIO.output(STATUS_LED, LED_ON)   # ON while booting/calibrating
 
 GPIO.setup(TRACK1_OBST_LED, GPIO.OUT)
-GPIO.output(TRACK1_OBST_LED, GPIO.LOW)
+GPIO.output(TRACK1_OBST_LED, LED_OFF)
 GPIO.setup(TRACK2_OBST_LED, GPIO.OUT)
-GPIO.output(TRACK2_OBST_LED, GPIO.LOW)
+GPIO.output(TRACK2_OBST_LED, LED_OFF)
 
 INPUT_PINS = [
     MASTER_BUTTON,
@@ -196,8 +208,8 @@ def update_obstacle_leds():
     track has an obstacle, OFF when clear. Call this repeatedly
     during IDLE/obstacle-checking loops.
     """
-    GPIO.output(TRACK1_OBST_LED, GPIO.HIGH if track1_obstacle_present() else GPIO.LOW)
-    GPIO.output(TRACK2_OBST_LED, GPIO.HIGH if track2_obstacle_present() else GPIO.LOW)
+    GPIO.output(TRACK1_OBST_LED, LED_ON if track1_obstacle_present() else LED_OFF)
+    GPIO.output(TRACK2_OBST_LED, LED_ON if track2_obstacle_present() else LED_OFF)
 
 def calibrate_sensors():
     """Read sensor baselines at boot (track must be clear)."""
@@ -652,7 +664,7 @@ def main():
         daemon=True
     ).start()
 
-    GPIO.output(STATUS_LED, GPIO.LOW)
+    GPIO.output(STATUS_LED, LED_OFF)
     print("✅  System ready!\n")
     print("    Press the MASTER BUTTON to start a race.\n")
 
@@ -705,13 +717,13 @@ def main():
                 reset_player(p2)
 
             # Obstacle detection paused during race — turn indicator LEDs off
-            GPIO.output(TRACK1_OBST_LED, GPIO.LOW)
-            GPIO.output(TRACK2_OBST_LED, GPIO.LOW)
+            GPIO.output(TRACK1_OBST_LED, LED_OFF)
+            GPIO.output(TRACK2_OBST_LED, LED_OFF)
 
             # ── Lights on one by one ───────────────────────────
             print("🔴  Lights turning on...")
             for i, pin in enumerate(LED_PINS, 1):
-                GPIO.output(pin, GPIO.HIGH)
+                GPIO.output(pin, LED_ON)
                 print(f"    Light {i} ON")
                 time.sleep(0.5)
 
@@ -722,7 +734,7 @@ def main():
 
             # ── ALL lights OFF → reaction clock starts ─────────
             for pin in LED_PINS:
-                GPIO.output(pin, GPIO.LOW)
+                GPIO.output(pin, LED_OFF)
 
             with data_lock:
                 lights_off_time = ms()
@@ -765,10 +777,10 @@ def main():
         print("\n🛑  Shutting down...")
     finally:
         for pin in LED_PINS:
-            GPIO.output(pin, GPIO.LOW)
-        GPIO.output(STATUS_LED, GPIO.LOW)
-        GPIO.output(TRACK1_OBST_LED, GPIO.LOW)
-        GPIO.output(TRACK2_OBST_LED, GPIO.LOW)
+            GPIO.output(pin, LED_OFF)
+        GPIO.output(STATUS_LED, LED_OFF)
+        GPIO.output(TRACK1_OBST_LED, LED_OFF)
+        GPIO.output(TRACK2_OBST_LED, LED_OFF)
         GPIO.cleanup()
         print("✅  GPIO cleaned up. Goodbye!")
 
