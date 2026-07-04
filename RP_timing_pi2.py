@@ -32,8 +32,8 @@ GPIO WIRING:
     End IR    →  GPIO 6    (active LOW = car/obstacle present)
 
   TRACK 2 (Player 2) — also used for obstacle detection:
-    Start IR  →  GPIO 20   (active LOW = car/obstacle present)
-    End IR    →  GPIO 21   (active LOW = car/obstacle present)
+    Start IR  →  GPIO 23   (active LOW = car/obstacle present)
+    End IR    →  GPIO 25   (active LOW = car/obstacle present)
 
   STATUS LED:
     GPIO 13  →  220Ω  →  LED  →  GND
@@ -87,8 +87,8 @@ REACTION_BTN_P2  = 22                  # Player 2 reaction button
 # Track sensors — ALSO used for obstacle detection before race
 TRACK1_START     = 26                  # Player 1 – start IR sensor
 TRACK1_END       = 6                   # Player 1 – end IR sensor
-TRACK2_START     = 20                  # Player 2 – start IR sensor
-TRACK2_END       = 21                  # Player 2 – end IR sensor
+TRACK2_START     = 23                  # Player 2 – start IR sensor
+TRACK2_END       = 25                  # Player 2 – end IR sensor
 
 STATUS_LED       = 13                  # Status LED
 
@@ -126,14 +126,16 @@ GPIO.output(TRACK1_OBST_LED, LED_OFF)
 GPIO.setup(TRACK2_OBST_LED, GPIO.OUT)
 GPIO.output(TRACK2_OBST_LED, LED_OFF)
 
-INPUT_PINS = [
-    MASTER_BUTTON,
-    REACTION_BTN_P1, REACTION_BTN_P2,
-    TRACK1_START, TRACK1_END,
-    TRACK2_START, TRACK2_END,
-]
-for pin in INPUT_PINS:
+# Buttons need internal pull-up (they short to GND when pressed)
+BUTTON_PINS = [MASTER_BUTTON, REACTION_BTN_P1, REACTION_BTN_P2]
+for pin in BUTTON_PINS:
     GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+# IR sensor modules have their own pull-up resistors on the board.
+# Disabling Pi's internal pull-up avoids voltage conflict (3.7V issue).
+IR_PINS = [TRACK1_START, TRACK1_END, TRACK2_START, TRACK2_END]
+for pin in IR_PINS:
+    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_OFF)
 
 # ══════════════════════════════════════════════
 #  RACE STATES
@@ -155,9 +157,6 @@ p1 = {"reaction": None, "race": None, "total": None}
 p2 = {"reaction": None, "race": None, "total": None}
 
 # ── Attempt history (persists across races in one session) ──
-# Each entry: {"attempt": N, "p1_total": ms|None, "p2_total": ms|None,
-#              "p1_reaction": ms|None, "p2_reaction": ms|None,
-#              "p1_race": ms|None, "p2_race": ms|None}
 attempt_history = []
 attempt_counter = 0
 
@@ -175,12 +174,6 @@ def ms():
     return time.perf_counter_ns() // 1_000_000
 
 def obstacle_present():
-    """
-    Checks all 4 track sensors for obstacles.
-    Uses calibrated baselines — if any sensor differs from clear level,
-    something is blocking the track.
-    Only call this BEFORE the race starts.
-    """
     return (
         GPIO.input(TRACK1_START) != track1_start_clear or
         GPIO.input(TRACK1_END)   != track1_end_clear   or
@@ -189,25 +182,18 @@ def obstacle_present():
     )
 
 def track1_obstacle_present():
-    """Checks only Track 1 (Player 1) sensors for an obstacle."""
     return (
         GPIO.input(TRACK1_START) != track1_start_clear or
         GPIO.input(TRACK1_END)   != track1_end_clear
     )
 
 def track2_obstacle_present():
-    """Checks only Track 2 (Player 2) sensors for an obstacle."""
     return (
         GPIO.input(TRACK2_START) != track2_start_clear or
         GPIO.input(TRACK2_END)   != track2_end_clear
     )
 
 def update_obstacle_leds():
-    """
-    Lights TRACK1_OBST_LED / TRACK2_OBST_LED solid ON while that
-    track has an obstacle, OFF when clear. Call this repeatedly
-    during IDLE/obstacle-checking loops.
-    """
     GPIO.output(TRACK1_OBST_LED, LED_ON if track1_obstacle_present() else LED_OFF)
     GPIO.output(TRACK2_OBST_LED, LED_ON if track2_obstacle_present() else LED_OFF)
 
@@ -222,20 +208,12 @@ def calibrate_sensors():
     track2_end_clear   = GPIO.input(TRACK2_END)
     print("✅  Sensors calibrated (track clear baseline saved)")
 
-def wait_master_button():
-    """Block until master button is pressed then released."""
-    while GPIO.input(MASTER_BUTTON) == GPIO.HIGH:
-        time.sleep(0.01)
-    while GPIO.input(MASTER_BUTTON) == GPIO.LOW:
-        time.sleep(0.01)
-
 def reset_player(d):
     d["reaction"] = None
     d["race"]     = None
     d["total"]    = None
 
 def record_attempt():
-    """Called after each race completes. Appends result to attempt_history."""
     global attempt_counter
     attempt_counter += 1
     with data_lock:
@@ -251,7 +229,6 @@ def record_attempt():
         attempt_history.append(entry)
 
 def attempt_stats(history, player="p1"):
-    """Returns best time, avg of best 4, all totals, top-4 totals for a player."""
     totals = [e[f"{player}_total"] for e in history if e[f"{player}_total"] is not None]
     if not totals:
         return None, None, [], []
@@ -266,13 +243,6 @@ def attempt_stats(history, player="p1"):
 # ══════════════════════════════════════════════
 def track_thread(player_id, reaction_btn, start_pin, start_clear,
                  end_pin, end_clear, player_dict):
-    """
-    One thread per track/player.
-    Waits for IN_PROGRESS, then:
-      1. Reaction button press  → reaction time (from lights OFF)
-      2. Car crosses START IR   → race timer starts
-      3. Car crosses END IR     → race timer stops, results saved
-    """
     global lights_off_time
 
     while True:
@@ -366,10 +336,8 @@ def generate_html(status_msg):
         r2   = dict(p2)
         hist = list(attempt_history)
 
-    # Obstacle check only relevant before race
     obs = obstacle_present() if rs == STATE_IDLE else False
 
-    # Traffic light logic
     top_light = "green"
     red_on    = False
     if obs or rs == STATE_OBSTACLE:
@@ -390,25 +358,21 @@ def generate_html(status_msg):
 
     red_lights = "".join(f'<div class="redlight {red_cls}"></div>' for _ in range(5))
 
-    # ── Attempt Summary for both players ──────────────────────────────
     def attempt_summary_html(player_key, player_label):
         best, avg4, all_totals, top4 = attempt_stats(hist, player_key)
 
         def fmt(v):
             return f"{v} ms" if v is not None else "--"
 
-        # Best / Avg boxes
         best_box = f'<div class="sumbox"><div class="sblbl">BEST TIME</div><div class="sbval">{fmt(best)}</div></div>'
         avg_box  = f'<div class="sumbox"><div class="sblbl">AVG OF BEST 4</div><div class="sbval">{fmt(avg4)}</div></div>'
 
-        # All attempts grid (2 columns)
         all_rows = ""
         for i, t in enumerate(all_totals, 1):
             all_rows += f'<div class="att-cell">Attempt {i}: <b>{fmt(t)}</b></div>'
         if not all_rows:
             all_rows = '<div class="att-cell att-empty">No attempts yet</div>'
 
-        # Top 4 list
         top4_rows = ""
         for i, t in enumerate(top4, 1):
             top4_rows += f'<div class="top-cell">Top {i}: <b>{fmt(t)}</b></div>'
@@ -434,7 +398,6 @@ def generate_html(status_msg):
     sum_p1 = attempt_summary_html("p1", "PLAYER 1")
     sum_p2 = attempt_summary_html("p2", "PLAYER 2")
 
-    # ── CSV data for download button ──────────────────────────────────
     csv_rows_js = "Attempt,P1 Reaction (ms),P1 Race (ms),P1 Total (ms),P2 Reaction (ms),P2 Race (ms),P2 Total (ms)\\n"
     for e in hist:
         def sv(v): return str(v) if v is not None else ""
@@ -458,15 +421,11 @@ def generate_html(status_msg):
 }}
 body{{background:var(--dark);color:var(--text);font-family:'Rajdhani',sans-serif;min-height:100vh;overflow-x:hidden}}
 body::after{{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.07) 2px,rgba(0,0,0,.07) 4px);pointer-events:none;z-index:9999}}
-
-/* HEADER */
 header{{display:flex;justify-content:space-between;align-items:center;padding:16px 5vw;border-bottom:3px solid var(--red);background:linear-gradient(180deg,#120508 0%,var(--dark) 100%)}}
 .logo-rp{{font-family:'Orbitron',monospace;font-weight:900;font-size:clamp(26px,4vw,48px);color:var(--red);letter-spacing:-1px}}
 header h1{{font-family:'Orbitron',monospace;font-size:clamp(11px,1.8vw,20px);letter-spacing:3px;text-align:center;line-height:1.6;color:var(--text)}}
 header h1 span{{color:var(--red)}}
 .logo-nuvex{{font-family:'Orbitron',monospace;font-weight:700;font-size:clamp(14px,2vw,24px);letter-spacing:2px;color:#fff;opacity:.65}}
-
-/* LIGHTS */
 .lights-wrap{{display:flex;flex-direction:column;align-items:center;gap:14px;padding:30px 0 18px}}
 .top-light{{width:50px;height:50px;border-radius:50%;background:#1a1a1a;border:2px solid #222;transition:background .3s,box-shadow .3s}}
 .top-light.green{{background:#00ff6a;box-shadow:0 0 28px #00ff6a,0 0 60px #00ff6a55}}
@@ -474,11 +433,7 @@ header h1 span{{color:var(--red)}}
 .red-row{{display:flex;gap:14px}}
 .redlight{{width:42px;height:42px;border-radius:50%;background:#180000;border:2px solid #2a0000;transition:background .3s,box-shadow .3s}}
 .redlight.on{{background:var(--red);box-shadow:0 0 24px var(--red),0 0 50px #e8002d55}}
-
-/* STATUS */
 .status-bar{{text-align:center;padding:13px 20px;font-family:'Orbitron',monospace;font-size:clamp(11px,1.6vw,16px);letter-spacing:3px;color:var(--gold);border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:28px;text-transform:uppercase}}
-
-/* CARDS */
 .cards{{display:grid;grid-template-columns:1fr 1fr;gap:3vw;padding:0 5vw 36px;max-width:1200px;margin:0 auto}}
 @media(max-width:680px){{.cards{{grid-template-columns:1fr}}header{{flex-direction:column;gap:10px;text-align:center}}.summary-section{{flex-direction:column}}}}
 .card{{background:var(--card);border:1px solid var(--border);border-top:5px solid var(--red);border-radius:18px;padding:32px 36px 28px;position:relative;overflow:hidden}}
@@ -491,8 +446,6 @@ header h1 span{{color:var(--red)}}
 .val{{font-family:'Orbitron',monospace;font-size:clamp(18px,2.4vw,28px);font-weight:700;color:var(--gold)}}
 .val.dim{{color:#333;font-size:clamp(14px,1.8vw,20px)}}
 .unit{{font-size:.6em;color:var(--dim);font-weight:400}}
-
-/* ── ATTEMPT SUMMARY ── */
 .summary-section{{display:flex;gap:3vw;padding:0 5vw 20px;max-width:1200px;margin:0 auto;flex-wrap:wrap}}
 .summary-card{{flex:1;min-width:280px;background:#0a0a0e;border:1px solid #2a1a00;border-top:4px solid var(--orange);border-radius:14px;padding:24px 28px 20px;position:relative}}
 .sum-title{{font-family:'Orbitron',monospace;font-size:clamp(11px,1.4vw,15px);letter-spacing:3px;color:var(--orange);margin-bottom:18px;text-transform:uppercase}}
@@ -510,33 +463,24 @@ header h1 span{{color:var(--red)}}
 .top-list{{display:flex;flex-direction:column;gap:5px}}
 .top-cell{{background:#0e0c08;border:1px solid #2a1a00;border-radius:5px;padding:7px 12px;font-size:clamp(11px,1.1vw,13px);letter-spacing:1px;color:#aaa}}
 .top-cell b{{color:var(--gold)}}
-
-/* DOWNLOAD BUTTON */
 .dl-wrap{{text-align:center;padding:22px 0 36px}}
 .dl-btn{{font-family:'Orbitron',monospace;font-size:clamp(11px,1.2vw,13px);letter-spacing:3px;color:var(--text);background:transparent;border:2px solid #333;border-radius:6px;padding:12px 32px;cursor:pointer;text-transform:uppercase;transition:border-color .2s,color .2s}}
 .dl-btn:hover{{border-color:var(--orange);color:var(--orange)}}
-
-/* FOOTER */
 footer{{text-align:center;padding:20px;color:#333;font-size:12px;letter-spacing:2px;border-top:1px solid var(--border);text-transform:uppercase}}
 </style>
 </head>
 <body>
-
 <header>
   <div class="logo-rp">RP</div>
   <h1><span>RACE</span> PAKISTAN<br>TIMING SYSTEM</h1>
   <div class="logo-nuvex">NUVEX</div>
 </header>
-
 <div class="lights-wrap">
   <div class="top-light {top_light}"></div>
   <div class="red-row">{red_lights}</div>
 </div>
-
 <div class="status-bar">{status_msg}</div>
-
 <div class="cards">
-
   <div class="card">
     <div class="ghost">1</div>
     <h2>Player 1</h2>
@@ -544,7 +488,6 @@ footer{{text-align:center;padding:20px;color:#333;font-size:12px;letter-spacing:
     {stat_row("Race Time",     r1["race"])}
     {stat_row("Total Time",    r1["total"])}
   </div>
-
   <div class="card">
     <div class="ghost">2</div>
     <h2>Player 2</h2>
@@ -552,20 +495,15 @@ footer{{text-align:center;padding:20px;color:#333;font-size:12px;letter-spacing:
     {stat_row("Race Time",     r2["race"])}
     {stat_row("Total Time",    r2["total"])}
   </div>
-
 </div>
-
 <div class="summary-section">
   {sum_p1}
   {sum_p2}
 </div>
-
 <div class="dl-wrap">
   <button class="dl-btn" onclick="downloadCSV()">&#x25BC; Download Attempts</button>
 </div>
-
 <footer>© 2025 · NUVEX × Race Pakistan · All Rights Reserved</footer>
-
 <script>
 function downloadCSV() {{
   var csv = `{csv_rows_js}`;
@@ -593,7 +531,6 @@ class RaceHandler(BaseHTTPRequestHandler):
         with data_lock:
             rs = race_state
 
-        # Determine status message
         if rs == STATE_OBSTACLE:
             msg = "OBSTACLE DETECTED — CLEAR THE TRACK"
         elif rs == STATE_IN_PROGRESS:
@@ -617,8 +554,6 @@ class RaceHandler(BaseHTTPRequestHandler):
 def start_web_server():
     class QuietServer(HTTPServer):
         def handle_error(self, request, client_address):
-            # Suppress noisy ConnectionResetError tracebacks
-            # (happens when browser cancels/refreshes a request - harmless)
             import sys
             exc = sys.exc_info()[1]
             if isinstance(exc, (ConnectionResetError, BrokenPipeError)):
@@ -641,13 +576,10 @@ def main():
     print("║  Raspberry Pi 4B  |  NUVEX © 2025        ║")
     print("╚══════════════════════════════════════════╝\n")
 
-    # Calibrate sensors at boot
     calibrate_sensors()
 
-    # Start web server thread
     threading.Thread(target=start_web_server, daemon=True).start()
 
-    # Start track threads
     threading.Thread(
         target=track_thread,
         args=(1, REACTION_BTN_P1,
@@ -664,33 +596,35 @@ def main():
         daemon=True
     ).start()
 
-    GPIO.output(STATUS_LED, LED_OFF)
+    GPIO.output(STATUS_LED, LED_OFF)  # OFF = idle/ready
     print("✅  System ready!\n")
     print("    Press the MASTER BUTTON to start a race.\n")
 
     try:
         while True:
 
-            # ── IDLE: check for obstacles using track sensors ──
+            # ── IDLE: status OFF, update obstacle LEDs continuously ──
+            GPIO.output(STATUS_LED, LED_OFF)
             update_obstacle_leds()
+
             if obstacle_present():
                 with data_lock:
                     race_state = STATE_OBSTACLE
                 print("🚧  Obstacle detected — waiting for track to clear...")
-
-                # Wait until all sensors are clear
                 while obstacle_present():
                     update_obstacle_leds()
                     time.sleep(0.1)
-
                 update_obstacle_leds()
                 with data_lock:
                     race_state = STATE_IDLE
                 print("✅  Track clear!")
 
-            # ── Wait for master button ─────────────────────────
-            # If button pressed while obstacle present → warn and wait
-            wait_master_button()
+            # ── Wait for master button (keep updating obstacle LEDs) ──
+            while GPIO.input(MASTER_BUTTON) == GPIO.HIGH:
+                update_obstacle_leds()
+                time.sleep(0.05)
+            while GPIO.input(MASTER_BUTTON) == GPIO.LOW:   # wait for release
+                time.sleep(0.01)
 
             if obstacle_present():
                 print("⚠️   Button pressed but obstacle detected! Clear track first.")
@@ -704,11 +638,13 @@ def main():
                 with data_lock:
                     race_state = STATE_IDLE
                 print("✅  Track clear — press button again to start.")
-                continue   # go back and wait for button again
+                continue
 
-            # ── Track is clear + button pressed → START ────────
+            # ── Track clear + button pressed → START ──────────────
             print("━" * 46)
             print("🟢  MASTER button pressed — race sequence starting!")
+
+            GPIO.output(STATUS_LED, LED_ON)   # ON = race active
 
             with data_lock:
                 race_state      = STATE_START
@@ -716,23 +652,23 @@ def main():
                 reset_player(p1)
                 reset_player(p2)
 
-            # Obstacle detection paused during race — turn indicator LEDs off
+            # Obstacle LEDs off for duration of race
             GPIO.output(TRACK1_OBST_LED, LED_OFF)
             GPIO.output(TRACK2_OBST_LED, LED_OFF)
 
-            # ── Lights on one by one ───────────────────────────
+            # ── Lights on one by one ───────────────────────────────
             print("🔴  Lights turning on...")
             for i, pin in enumerate(LED_PINS, 1):
                 GPIO.output(pin, LED_ON)
                 print(f"    Light {i} ON")
                 time.sleep(0.5)
 
-            # ── Hold ON for random 1–3 seconds ─────────────────
+            # ── Hold ON for random 1–3 seconds ─────────────────────
             hold_sec = random.uniform(1.0, 3.0)
             print(f"⏳  Lights holding for {hold_sec:.2f}s...")
             time.sleep(hold_sec)
 
-            # ── ALL lights OFF → reaction clock starts ─────────
+            # ── ALL lights OFF → reaction clock starts ──────────────
             for pin in LED_PINS:
                 GPIO.output(pin, LED_OFF)
 
@@ -740,10 +676,9 @@ def main():
                 lights_off_time = ms()
                 race_state      = STATE_IN_PROGRESS
 
-            # !! Obstacle detection is now OFF during the race !!
             print("🏁  LIGHTS OUT — GO GO GO!")
 
-            # ── Wait for both players to finish (max 25 sec) ───
+            # ── Wait for both players to finish (max 25 sec) ────────
             deadline = ms() + 25_000
             while ms() < deadline:
                 with data_lock:
@@ -753,11 +688,10 @@ def main():
                     break
                 time.sleep(0.1)
 
-            # ── Race complete ──────────────────────────────────
+            # ── Race complete ────────────────────────────────────────
             with data_lock:
                 race_state = STATE_COMPLETE
 
-            # Save this race to attempt history
             record_attempt()
 
             print("\n✅  RACE COMPLETE")
@@ -767,6 +701,7 @@ def main():
 
             time.sleep(5)
 
+            GPIO.output(STATUS_LED, LED_OFF)  # back to idle
             with data_lock:
                 race_state = STATE_IDLE
 
