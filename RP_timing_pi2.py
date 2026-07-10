@@ -77,7 +77,7 @@ except ImportError:
 # ══════════════════════════════════════════════
 #  PIN DEFINITIONS
 # ══════════════════════════════════════════════
-LED_PINS         = [17, 4, 5, 18, 19]  # 5 start lights (in order)
+LED_PINS         = [17, 4, 5, 18, 11]  # 5 start lights (in order, LED5 on GPIO 11)
 
 MASTER_BUTTON    = 15                  # Race start button
 
@@ -91,6 +91,7 @@ TRACK2_START     = 23                  # Player 2 – start IR sensor
 TRACK2_END       = 25                  # Player 2 – end IR sensor
 
 STATUS_LED       = 13                  # Status LED
+HOTSPOT_LED      = 7                   # Hotspot indicator LED (ON = hotspot active)
 
 # Per-track obstacle indicator LEDs
 TRACK1_OBST_LED  = 12                  # Player 1 – obstacle LED
@@ -125,6 +126,8 @@ GPIO.setup(TRACK1_OBST_LED, GPIO.OUT)
 GPIO.output(TRACK1_OBST_LED, LED_OFF)
 GPIO.setup(TRACK2_OBST_LED, GPIO.OUT)
 GPIO.output(TRACK2_OBST_LED, LED_OFF)
+GPIO.setup(HOTSPOT_LED, GPIO.OUT)
+GPIO.output(HOTSPOT_LED, LED_OFF)
 
 # Buttons need internal pull-up (they short to GND when pressed)
 BUTTON_PINS = [MASTER_BUTTON, REACTION_BTN_P1, REACTION_BTN_P2]
@@ -180,6 +183,26 @@ def obstacle_present():
         GPIO.input(TRACK2_START) != track2_start_clear or
         GPIO.input(TRACK2_END)   != track2_end_clear
     )
+
+def hotspot_led_thread():
+    """
+    Checks every 5 seconds if hotspot (ap0) has IP 192.168.4.1.
+    Turns HOTSPOT_LED ON when hotspot is active, OFF when down.
+    """
+    import subprocess
+    while True:
+        try:
+            result = subprocess.run(
+                ["ip", "addr", "show", "ap0"],
+                capture_output=True, text=True
+            )
+            if "192.168.4.1" in result.stdout:
+                GPIO.output(HOTSPOT_LED, LED_ON)
+            else:
+                GPIO.output(HOTSPOT_LED, LED_OFF)
+        except Exception:
+            GPIO.output(HOTSPOT_LED, LED_OFF)
+        time.sleep(5)
 
 def track1_obstacle_present():
     return (
@@ -579,6 +602,7 @@ def main():
     calibrate_sensors()
 
     threading.Thread(target=start_web_server, daemon=True).start()
+    threading.Thread(target=hotspot_led_thread, daemon=True).start()
 
     threading.Thread(
         target=track_thread,
@@ -714,6 +738,7 @@ def main():
         for pin in LED_PINS:
             GPIO.output(pin, LED_OFF)
         GPIO.output(STATUS_LED, LED_OFF)
+        GPIO.output(HOTSPOT_LED, LED_OFF)
         GPIO.output(TRACK1_OBST_LED, LED_OFF)
         GPIO.output(TRACK2_OBST_LED, LED_OFF)
         GPIO.cleanup()
