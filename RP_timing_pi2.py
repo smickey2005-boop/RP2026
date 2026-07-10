@@ -18,7 +18,7 @@ GPIO WIRING:
     LED 2  →  GPIO 4   → 220Ω → LED → GND
     LED 3  →  GPIO 5   → 220Ω → LED → GND
     LED 4  →  GPIO 18  → 220Ω → LED → GND
-    LED 5  →  GPIO 19  → 220Ω → LED → GND
+    LED 5  →  GPIO 11  → 220Ω → LED → GND
 
   MASTER START BUTTON:
     GPIO 15  →  Button  →  GND  (internal pull-up)
