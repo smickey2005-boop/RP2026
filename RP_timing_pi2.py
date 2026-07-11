@@ -421,7 +421,8 @@ def generate_html(status_msg):
 body{{background:var(--dark);color:var(--text);font-family:'Rajdhani',sans-serif;min-height:100vh;overflow-x:hidden}}
 body::after{{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.07) 2px,rgba(0,0,0,.07) 4px);pointer-events:none;z-index:9999}}
 header{{display:flex;justify-content:space-between;align-items:center;padding:16px 5vw;border-bottom:3px solid var(--red);background:linear-gradient(180deg,#120508 0%,var(--dark) 100%)}}
-.logo-rp{{font-family:'Orbitron',monospace;font-weight:900;font-size:clamp(26px,4vw,48px);color:var(--red);letter-spacing:-1px}}
+.logo-rp{{display:flex;align-items:center;max-width:220px}}
+.logo-rp img{{height:40px;width:auto;object-fit:contain}}
 header h1{{font-family:'Orbitron',monospace;font-size:clamp(11px,1.8vw,20px);letter-spacing:3px;text-align:center;line-height:1.6;color:var(--text)}}
 header h1 span{{color:var(--red)}}
 .logo-nuvex{{font-family:'Orbitron',monospace;font-weight:700;font-size:clamp(14px,2vw,24px);letter-spacing:2px;color:#fff;opacity:.65}}
