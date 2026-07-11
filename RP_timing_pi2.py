@@ -18,7 +18,7 @@ GPIO WIRING:
     LED 2  →  GPIO 4   → 220Ω → LED → GND
     LED 3  →  GPIO 5   → 220Ω → LED → GND
     LED 4  →  GPIO 18  → 220Ω → LED → GND
-    LED 5  →  GPIO 11  → 220Ω → LED → GND
+    LED 5  →  GPIO 19  → 220Ω → LED → GND
 
   MASTER START BUTTON:
     GPIO 15  →  Button  →  GND  (internal pull-up)
@@ -77,7 +77,7 @@ except ImportError:
 # ══════════════════════════════════════════════
 #  PIN DEFINITIONS
 # ══════════════════════════════════════════════
-LED_PINS         = [17, 4, 5, 18, 11]  # 5 start lights (in order, LED5 on GPIO 11)
+LED_PINS         = [17, 4, 5, 18, 19]  # 5 start lights (in order)
 
 MASTER_BUTTON    = 15                  # Race start button
 
@@ -91,7 +91,6 @@ TRACK2_START     = 23                  # Player 2 – start IR sensor
 TRACK2_END       = 25                  # Player 2 – end IR sensor
 
 STATUS_LED       = 13                  # Status LED
-HOTSPOT_LED      = 7                   # Hotspot indicator LED (ON = hotspot active)
 
 # Per-track obstacle indicator LEDs
 TRACK1_OBST_LED  = 12                  # Player 1 – obstacle LED
@@ -126,8 +125,6 @@ GPIO.setup(TRACK1_OBST_LED, GPIO.OUT)
 GPIO.output(TRACK1_OBST_LED, LED_OFF)
 GPIO.setup(TRACK2_OBST_LED, GPIO.OUT)
 GPIO.output(TRACK2_OBST_LED, LED_OFF)
-GPIO.setup(HOTSPOT_LED, GPIO.OUT)
-GPIO.output(HOTSPOT_LED, LED_OFF)
 
 # Buttons need internal pull-up (they short to GND when pressed)
 BUTTON_PINS = [MASTER_BUTTON, REACTION_BTN_P1, REACTION_BTN_P2]
@@ -183,26 +180,6 @@ def obstacle_present():
         GPIO.input(TRACK2_START) != track2_start_clear or
         GPIO.input(TRACK2_END)   != track2_end_clear
     )
-
-def hotspot_led_thread():
-    """
-    Checks every 5 seconds if hotspot (ap0) has IP 192.168.4.1.
-    Turns HOTSPOT_LED ON when hotspot is active, OFF when down.
-    """
-    import subprocess
-    while True:
-        try:
-            result = subprocess.run(
-                ["ip", "addr", "show", "ap0"],
-                capture_output=True, text=True
-            )
-            if "192.168.4.1" in result.stdout:
-                GPIO.output(HOTSPOT_LED, LED_ON)
-            else:
-                GPIO.output(HOTSPOT_LED, LED_OFF)
-        except Exception:
-            GPIO.output(HOTSPOT_LED, LED_OFF)
-        time.sleep(5)
 
 def track1_obstacle_present():
     return (
@@ -433,7 +410,6 @@ def generate_html(status_msg):
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="1">
 <title>Race Pakistan – F1 Timing</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600;700&display=swap');
@@ -445,8 +421,7 @@ def generate_html(status_msg):
 body{{background:var(--dark);color:var(--text);font-family:'Rajdhani',sans-serif;min-height:100vh;overflow-x:hidden}}
 body::after{{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.07) 2px,rgba(0,0,0,.07) 4px);pointer-events:none;z-index:9999}}
 header{{display:flex;justify-content:space-between;align-items:center;padding:16px 5vw;border-bottom:3px solid var(--red);background:linear-gradient(180deg,#120508 0%,var(--dark) 100%)}}
-.logo-rp{{display:flex;align-items:center}}
-.logo-rp img{{height:clamp(32px,5vw,56px);width:auto}}
+.logo-rp{{font-family:'Orbitron',monospace;font-weight:900;font-size:clamp(26px,4vw,48px);color:var(--red);letter-spacing:-1px}}
 header h1{{font-family:'Orbitron',monospace;font-size:clamp(11px,1.8vw,20px);letter-spacing:3px;text-align:center;line-height:1.6;color:var(--text)}}
 header h1 span{{color:var(--red)}}
 .logo-nuvex{{font-family:'Orbitron',monospace;font-weight:700;font-size:clamp(14px,2vw,24px);letter-spacing:2px;color:#fff;opacity:.65}}
@@ -500,44 +475,157 @@ footer{{text-align:center;padding:20px;color:#333;font-size:12px;letter-spacing:
   <div class="logo-nuvex">NUVEX</div>
 </header>
 <div class="lights-wrap">
-  <div class="top-light {top_light}"></div>
+  <div class="top-light {top_light}" id="top-light"></div>
   <div class="red-row">{red_lights}</div>
 </div>
-<div class="status-bar">{status_msg}</div>
+<div class="status-bar" id="status-bar">{status_msg}</div>
 <div class="cards">
   <div class="card">
     <div class="ghost">1</div>
     <h2>Player 1</h2>
-    {stat_row("Reaction Time", r1["reaction"])}
-    {stat_row("Race Time",     r1["race"])}
-    {stat_row("Total Time",    r1["total"])}
+    <div class="stat"><span class="lbl">Reaction Time</span><span id="p1-reaction" class="val dim">--</span></div>
+    <div class="stat"><span class="lbl">Race Time</span><span id="p1-race" class="val dim">--</span></div>
+    <div class="stat"><span class="lbl">Total Time</span><span id="p1-total" class="val dim">--</span></div>
   </div>
   <div class="card">
     <div class="ghost">2</div>
     <h2>Player 2</h2>
-    {stat_row("Reaction Time", r2["reaction"])}
-    {stat_row("Race Time",     r2["race"])}
-    {stat_row("Total Time",    r2["total"])}
+    <div class="stat"><span class="lbl">Reaction Time</span><span id="p2-reaction" class="val dim">--</span></div>
+    <div class="stat"><span class="lbl">Race Time</span><span id="p2-race" class="val dim">--</span></div>
+    <div class="stat"><span class="lbl">Total Time</span><span id="p2-total" class="val dim">--</span></div>
   </div>
 </div>
 <div class="summary-section">
-  {sum_p1}
-  {sum_p2}
+  <div class="summary-card">
+    <div class="sum-title">ATTEMPT SUMMARY — PLAYER 1</div>
+    <div class="sum-boxes">
+      <div class="sumbox"><div class="sblbl">BEST TIME</div><div class="sbval" id="p1-best">--</div></div>
+      <div class="sumbox"><div class="sblbl">AVG OF BEST 4</div><div class="sbval" id="p1-avg4">--</div></div>
+    </div>
+    <div class="sum-tables">
+      <div class="sum-col">
+        <div class="sum-col-title">ALL ATTEMPTS</div>
+        <div class="att-grid" id="p1-all"><div class="att-cell att-empty" style="grid-column:1/-1">No attempts yet</div></div>
+      </div>
+      <div class="sum-col">
+        <div class="sum-col-title">TOP 4 BEST ATTEMPTS</div>
+        <div class="top-list" id="p1-top4"><div class="top-cell att-empty">--</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="summary-card">
+    <div class="sum-title">ATTEMPT SUMMARY — PLAYER 2</div>
+    <div class="sum-boxes">
+      <div class="sumbox"><div class="sblbl">BEST TIME</div><div class="sbval" id="p2-best">--</div></div>
+      <div class="sumbox"><div class="sblbl">AVG OF BEST 4</div><div class="sbval" id="p2-avg4">--</div></div>
+    </div>
+    <div class="sum-tables">
+      <div class="sum-col">
+        <div class="sum-col-title">ALL ATTEMPTS</div>
+        <div class="att-grid" id="p2-all"><div class="att-cell att-empty" style="grid-column:1/-1">No attempts yet</div></div>
+      </div>
+      <div class="sum-col">
+        <div class="sum-col-title">TOP 4 BEST ATTEMPTS</div>
+        <div class="top-list" id="p2-top4"><div class="top-cell att-empty">--</div></div>
+      </div>
+    </div>
+  </div>
 </div>
 <div class="dl-wrap">
   <button class="dl-btn" onclick="downloadCSV()">&#x25BC; Download Attempts</button>
 </div>
 <footer>© 2025 · NUVEX × Race Pakistan · All Rights Reserved</footer>
 <script>
+// ── JS LIVE POLLING — updates page without reload ──────────────
+const STATES = {{
+  IDLE: 'IDLE', OBSTACLE: 'OBSTACLE', START: 'START',
+  IN_PROGRESS: 'IN_PROGRESS', COMPLETE: 'COMPLETE'
+}};
+
+function fmt(v) {{
+  if (v === null || v === undefined) return '<span class="val dim">--</span>';
+  if (v === 0) return '<span class="val dim">EMPTY</span>';
+  return `<span class="val">${{v}} <span class="unit">ms</span></span>`;
+}}
+
+function updateLights(state) {{
+  const top = document.getElementById('top-light');
+  const reds = document.querySelectorAll('.redlight');
+  top.className = 'top-light';
+  reds.forEach(r => r.classList.remove('on'));
+  if (state === 'OBSTACLE') {{ top.classList.add('yellow'); }}
+  else if (state === 'IDLE') {{ top.classList.add('green'); }}
+  else if (state === 'IN_PROGRESS' || state === 'START') {{
+    reds.forEach(r => r.classList.add('on'));
+  }} else if (state === 'COMPLETE') {{ top.classList.add('green'); }}
+}}
+
+function updateCard(prefix, data) {{
+  document.getElementById(`${{prefix}}-reaction`).innerHTML = fmt(data.reaction);
+  document.getElementById(`${{prefix}}-race`).innerHTML     = fmt(data.race);
+  document.getElementById(`${{prefix}}-total`).innerHTML    = fmt(data.total);
+}}
+
+function updateSummary(prefix, stats) {{
+  const fmtMs = v => v !== null && v !== undefined ? `${{v}} ms` : '--';
+  document.getElementById(`${{prefix}}-best`).textContent  = fmtMs(stats.best);
+  document.getElementById(`${{prefix}}-avg4`).textContent  = fmtMs(stats.avg4);
+
+  // All attempts grid
+  const grid = document.getElementById(`${{prefix}}-all`);
+  if (stats.all.length === 0) {{
+    grid.innerHTML = '<div class="att-cell att-empty" style="grid-column:1/-1">No attempts yet</div>';
+  }} else {{
+    grid.innerHTML = stats.all.map((t,i) =>
+      `<div class="att-cell">Attempt ${{i+1}}: <b>${{fmtMs(t)}}</b></div>`
+    ).join('');
+  }}
+
+  // Top 4
+  const top = document.getElementById(`${{prefix}}-top4`);
+  if (stats.top4.length === 0) {{
+    top.innerHTML = '<div class="top-cell att-empty">--</div>';
+  }} else {{
+    top.innerHTML = stats.top4.map((t,i) =>
+      `<div class="top-cell">Top ${{i+1}}: <b>${{fmtMs(t)}}</b></div>`
+    ).join('');
+  }}
+}}
+
+function poll() {{
+  fetch('/data')
+    .then(r => r.json())
+    .then(d => {{
+      document.getElementById('status-bar').textContent = d.status;
+      updateLights(d.state);
+      updateCard('p1', d.p1);
+      updateCard('p2', d.p2);
+      updateSummary('p1', d.p1_stats);
+      updateSummary('p2', d.p2_stats);
+    }})
+    .catch(() => {{}})  // silently ignore network errors
+    .finally(() => setTimeout(poll, 1000));
+}}
+
+// Start polling
+poll();
+
+// ── CSV Download ───────────────────────────────────────────────
 function downloadCSV() {{
-  var csv = `{csv_rows_js}`;
-  var blob = new Blob([csv], {{type: 'text/csv'}});
-  var url  = URL.createObjectURL(blob);
-  var a    = document.createElement('a');
-  a.href   = url;
-  a.download = 'race_pakistan_attempts.csv';
-  a.click();
-  URL.revokeObjectURL(url);
+  fetch('/data')
+    .then(r => r.json())
+    .then(d => {{
+      let csv = 'Attempt,P1 Reaction (ms),P1 Race (ms),P1 Total (ms),P2 Reaction (ms),P2 Race (ms),P2 Total (ms)\\n';
+      d.attempts.forEach(e => {{
+        const sv = v => v !== null && v !== undefined ? v : '';
+        csv += `${{e.attempt}},${{sv(e.p1_reaction)}},${{sv(e.p1_race)}},${{sv(e.p1_total)}},${{sv(e.p2_reaction)}},${{sv(e.p2_race)}},${{sv(e.p2_total)}}\\n`;
+      }});
+      const blob = new Blob([csv], {{type: 'text/csv'}});
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = 'race_pakistan_attempts.csv'; a.click();
+      URL.revokeObjectURL(url);
+    }});
 }}
 </script>
 </body>
@@ -552,22 +640,72 @@ class RaceHandler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
+        # ── /data → JSON for live polling (no page reload needed) ──
+        if self.path == "/data":
+            self._serve_json()
+            return
+        # ── / → full HTML page (loaded once) ──
+        self._serve_html()
+
+    def _get_status_msg(self, rs):
+        if rs == STATE_OBSTACLE:
+            return "OBSTACLE DETECTED — CLEAR THE TRACK"
+        elif rs == STATE_IN_PROGRESS:
+            return "RACE IN PROGRESS"
+        elif rs == STATE_COMPLETE:
+            return "RACE COMPLETE"
+        elif rs == STATE_START:
+            return "GET READY..."
+        elif obstacle_present():
+            return "OBSTACLE DETECTED — CLEAR THE TRACK"
+        else:
+            return "TRACK CLEAR — READY"
+
+    def _serve_json(self):
+        """Serve live race data as JSON for JS polling."""
+        import json
+        with data_lock:
+            rs  = race_state
+            r1  = dict(p1)
+            r2  = dict(p2)
+            hist = list(attempt_history)
+
+        msg = self._get_status_msg(rs)
+
+        # Compute attempt stats
+        def stats(player):
+            totals = [e[f"{player}_total"] for e in hist if e[f"{player}_total"] is not None]
+            if not totals:
+                return None, None, [], []
+            st = sorted(totals)
+            top4 = st[:4]
+            return st[0], round(sum(top4)/len(top4)), totals, top4
+
+        p1_best, p1_avg4, p1_all, p1_top4 = stats("p1")
+        p2_best, p2_avg4, p2_all, p2_top4 = stats("p2")
+
+        data = {
+            "state": rs,
+            "status": msg,
+            "p1": r1,
+            "p2": r2,
+            "p1_stats": {"best": p1_best, "avg4": p1_avg4, "all": p1_all, "top4": p1_top4},
+            "p2_stats": {"best": p2_best, "avg4": p2_avg4, "all": p2_all, "top4": p2_top4},
+            "attempts": hist,
+        }
+        body = json.dumps(data).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_html(self):
+        """Serve the full HTML page (loaded once, then JS polls /data)."""
         with data_lock:
             rs = race_state
-
-        if rs == STATE_OBSTACLE:
-            msg = "OBSTACLE DETECTED — CLEAR THE TRACK"
-        elif rs == STATE_IN_PROGRESS:
-            msg = "RACE IN PROGRESS"
-        elif rs == STATE_COMPLETE:
-            msg = "RACE COMPLETE"
-        elif rs == STATE_START:
-            msg = "GET READY..."
-        elif obstacle_present():
-            msg = "OBSTACLE DETECTED — CLEAR THE TRACK"
-        else:
-            msg = "TRACK CLEAR — READY"
-
+        msg = self._get_status_msg(rs)
         html = generate_html(msg).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type",   "text/html; charset=utf-8")
@@ -603,7 +741,6 @@ def main():
     calibrate_sensors()
 
     threading.Thread(target=start_web_server, daemon=True).start()
-    threading.Thread(target=hotspot_led_thread, daemon=True).start()
 
     threading.Thread(
         target=track_thread,
@@ -739,7 +876,6 @@ def main():
         for pin in LED_PINS:
             GPIO.output(pin, LED_OFF)
         GPIO.output(STATUS_LED, LED_OFF)
-        GPIO.output(HOTSPOT_LED, LED_OFF)
         GPIO.output(TRACK1_OBST_LED, LED_OFF)
         GPIO.output(TRACK2_OBST_LED, LED_OFF)
         GPIO.cleanup()
