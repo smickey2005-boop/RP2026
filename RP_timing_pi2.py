@@ -665,29 +665,78 @@ class RaceHandler(BaseHTTPRequestHandler):
         pass
 
     def do_GET(self):
+        # ── /data → JSON for live polling (no page reload needed) ──
+        if self.path == "/data":
+            self._serve_json()
+            return
+        # ── / → full HTML page (loaded once) ──
+        self._serve_html()
+
+    def _get_status_msg(self, rs):
+        if rs == STATE_OBSTACLE:
+            return "OBSTACLE DETECTED — CLEAR THE TRACK"
+        elif rs == STATE_IN_PROGRESS:
+            return "RACE IN PROGRESS"
+        elif rs == STATE_COMPLETE:
+            return "RACE COMPLETE"
+        elif rs == STATE_START:
+            return "GET READY..."
+        elif obstacle_present():
+            return "OBSTACLE DETECTED — CLEAR THE TRACK"
+        else:
+            return "TRACK CLEAR — READY"
+
+    def _serve_json(self):
+        """Serve live race data as JSON for JS polling."""
+        import json
+        with data_lock:
+            rs  = race_state
+            r1  = dict(p1)
+            r2  = dict(p2)
+            hist = list(attempt_history)
+
+        msg = self._get_status_msg(rs)
+
+        # Compute attempt stats
+        def stats(player):
+            totals = [e[f"{player}_total"] for e in hist if e[f"{player}_total"] is not None]
+            if not totals:
+                return None, None, [], []
+            st = sorted(totals)
+            top4 = st[:4]
+            return st[0], round(sum(top4)/len(top4)), totals, top4
+
+        p1_best, p1_avg4, p1_all, p1_top4 = stats("p1")
+        p2_best, p2_avg4, p2_all, p2_top4 = stats("p2")
+
+        data = {
+            "state": rs,
+            "status": msg,
+            "p1": r1,
+            "p2": r2,
+            "p1_stats": {"best": p1_best, "avg4": p1_avg4, "all": p1_all, "top4": p1_top4},
+            "p2_stats": {"best": p2_best, "avg4": p2_avg4, "all": p2_all, "top4": p2_top4},
+            "attempts": hist,
+        }
+        body = json.dumps(data).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _serve_html(self):
+        """Serve the full HTML page (loaded once, then JS polls /data)."""
         with data_lock:
             rs = race_state
-
-        if rs == STATE_OBSTACLE:
-            msg = "OBSTACLE DETECTED — CLEAR THE TRACK"
-        elif rs == STATE_IN_PROGRESS:
-            msg = "RACE IN PROGRESS"
-        elif rs == STATE_COMPLETE:
-            msg = "RACE COMPLETE"
-        elif rs == STATE_START:
-            msg = "GET READY..."
-        elif obstacle_present():
-            msg = "OBSTACLE DETECTED — CLEAR THE TRACK"
-        else:
-            msg = "TRACK CLEAR — READY"
-
+        msg = self._get_status_msg(rs)
         html = generate_html(msg).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type",   "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(html)))
         self.end_headers()
         self.wfile.write(html)
-
 def start_web_server():
     class QuietServer(HTTPServer):
         def handle_error(self, request, client_address):
