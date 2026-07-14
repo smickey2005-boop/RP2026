@@ -130,10 +130,16 @@ GPIO.output(TRACK1_OBST_LED, LED_OFF)
 GPIO.setup(TRACK2_OBST_LED, GPIO.OUT)
 GPIO.output(TRACK2_OBST_LED, LED_OFF)
 
-# Buttons need internal pull-up (they short to GND when pressed)
-BUTTON_PINS = [MASTER_BUTTON, REACTION_BTN_P1, REACTION_BTN_P2]
-for pin in BUTTON_PINS:
-    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+# Master button is NO (Normally Open) — pulls LOW when pressed
+GPIO.setup(MASTER_BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+
+# Reaction buttons are NC limit switches (Normally Closed):
+# Idle/loaded  = switch CLOSED = reads LOW
+# Fired/triggered = switch OPENS = reads HIGH
+# Use PUD_DOWN so the pin is pulled LOW when switch opens
+REACTION_TRIGGERED = GPIO.HIGH   # NC switch opens when launcher fires
+GPIO.setup(REACTION_BTN_P1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(REACTION_BTN_P2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 # IR sensor modules have their own pull-up resistors on the board.
 # Disabling Pi's internal pull-up avoids voltage conflict (3.7V issue).
@@ -297,14 +303,14 @@ def track_thread(player_id, reaction_btn, start_pin, start_clear,
         # ── STEP 1: Reaction button ────────────────────
         deadline = ms() + 30_000
         while ms() < deadline:
-            if GPIO.input(reaction_btn) == GPIO.LOW:
+            if GPIO.input(reaction_btn) == REACTION_TRIGGERED:
                 press_ms = ms()
                 with data_lock:
                     loff = lights_off_time
                 if loff is not None:
                     reaction_time = max(0, press_ms - loff)
                 print(f"[Player {player_id}] Reaction = {reaction_time} ms")
-                while GPIO.input(reaction_btn) == GPIO.LOW:
+                while GPIO.input(reaction_btn) == REACTION_TRIGGERED:
                     time.sleep(0.005)
                 break
             with data_lock:
