@@ -3,7 +3,7 @@
 ╔══════════════════════════════════════════════════════════╗
 ║       RACE PAKISTAN – F1 TIMING SYSTEM                ║
 ║       Raspberry Pi 4B – Complete Standalone Version      ║
-║       NUVEX × Race Pakistan  © 2026                   ║
+║       NUVEX × Race Pakistan  © 2025                   ║
 ╚══════════════════════════════════════════════════════════╝
 
 HOW TO RUN:
