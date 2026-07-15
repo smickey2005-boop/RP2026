@@ -3,7 +3,7 @@
 ╔══════════════════════════════════════════════════════════╗
 ║       RACE PAKISTAN – F1 TIMING SYSTEM                ║
 ║       Raspberry Pi 4B – Complete Standalone Version      ║
-║       NUVEX × Race Pakistan  © 2025                   ║
+║       NUVEX × Race Pakistan  © 2026                   ║
 ╚══════════════════════════════════════════════════════════╝
 
 HOW TO RUN:
@@ -417,8 +417,9 @@ header{{display:flex;justify-content:space-between;align-items:center;padding:16
 .logo-rp{{display:flex;align-items:center;max-width:220px}}
 .logo-rp img{{height:40px;width:auto;object-fit:contain}}
 header h1{{font-family:'Orbitron',monospace;font-size:clamp(11px,1.8vw,20px);letter-spacing:3px;text-align:center;line-height:1.6;color:var(--text)}}
-.logo-nuvex{{display:flex;align-items:center}}
-.logo-nuvex img{{height:36px;width:auto;object-fit:contain;opacity:0.85}}
+.logo-nuvex{{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:2px}}
+.nuvex-text{{font-family:'Orbitron',monospace;font-weight:900;font-size:clamp(16px,2.2vw,28px);letter-spacing:4px;color:#ffffff;opacity:0.9;line-height:1}}
+.nuvex-sub{{font-family:'Rajdhani',sans-serif;font-weight:600;font-size:clamp(8px,0.9vw,11px);letter-spacing:3px;color:#7b7bff;text-transform:uppercase;line-height:1}}
 .lights-wrap{{display:flex;flex-direction:column;align-items:center;gap:14px;padding:30px 0 18px}}
 .top-light{{width:50px;height:50px;border-radius:50%;background:#1a1a1a;border:2px solid #222;transition:background .3s,box-shadow .3s}}
 .top-light.green{{background:#00ff6a;box-shadow:0 0 28px #00ff6a,0 0 60px #00ff6a55}}
@@ -466,7 +467,7 @@ footer{{text-align:center;padding:20px;color:#333;font-size:12px;letter-spacing:
 <header>
   <div class="logo-rp"><img src="{_RP_LOGO}" alt="Race Pakistan"></div>
   <h1>TIMING SYSTEM</h1>
-  <div class="logo-nuvex"><img src="{_NUVEX_LOGO}" alt="NUVEX"></div>
+  <div class="logo-nuvex"><div class="nuvex-text">NUVEX</div><div class="nuvex-sub">THINK INFINITE</div></div>
 </header>
 <div class="lights-wrap">
   <div class="top-light {top_light}" id="top-light"></div>
