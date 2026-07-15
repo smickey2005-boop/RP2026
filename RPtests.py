@@ -3,7 +3,7 @@
 ╔══════════════════════════════════════════════════════════╗
 ║       RACE PAKISTAN – F1 TIMING SYSTEM                ║
 ║       Raspberry Pi 4B – Complete Standalone Version      ║
-║       NUVEX × Race Pakistan  © 2026                   ║
+║       NUVEX × Race Pakistan  © 2025                   ║
 ╚══════════════════════════════════════════════════════════╝
 
 HOW TO RUN:
@@ -299,34 +299,28 @@ def track_thread(player_id, reaction_btn, start_pin, start_clear,
         start_time    = None
 
         # ── STEP 1: Reaction button ────────────────────
-        # Wait for launcher to be in FIRED state (switch OPEN = LOW)
-        # before listening for trigger. This prevents false trigger
-        # if launcher is still loaded (switch CLOSED = HIGH) at race start.
-        settle_deadline = ms() + 5_000
-        while ms() < settle_deadline:
-            if GPIO.input(reaction_btn) != REACTION_TRIGGERED:
-                break   # switch is open = launcher ready/fired position
+        # Launcher is LOADED before lights out (switch CLOSED = HIGH)
+        # Player fires after lights out (switch OPENS = LOW) = reaction moment
+        # After race, player reloads (switch CLOSES = HIGH) — must ignore this
+
+        # Wait 50ms for pins to settle after lights out
+        time.sleep(0.05)
+
+        # Confirm launcher is loaded (HIGH) before listening
+        # If not loaded, just wait up to 5s for player to load
+        load_wait = ms() + 5_000
+        while ms() < load_wait:
+            if GPIO.input(reaction_btn) == GPIO.HIGH:
+                break
             time.sleep(0.005)
 
-        # Now wait for launcher to LOAD and FIRE (switch closes then opens)
-        # First wait for switch to CLOSE (loaded = HIGH)
-        load_deadline = ms() + 30_000
-        while ms() < load_deadline:
-            if GPIO.input(reaction_btn) == REACTION_TRIGGERED:
-                break   # launcher loaded
-            with data_lock:
-                s = race_state
-            if s != STATE_IN_PROGRESS:
-                break
-            time.sleep(0.004)
-
-        # Now wait for switch to OPEN (fired = LOW) → this is the reaction moment
-        fire_deadline = ms() + 30_000
-        while ms() < fire_deadline:
-            if GPIO.input(reaction_btn) != REACTION_TRIGGERED:
-                # Debounce — confirm LOW stays for 10ms
-                time.sleep(0.01)
-                if GPIO.input(reaction_btn) != REACTION_TRIGGERED:
+        # Now wait for launcher to FIRE (switch OPENS = LOW)
+        deadline = ms() + 30_000
+        while ms() < deadline:
+            if GPIO.input(reaction_btn) == GPIO.LOW:
+                # Debounce — confirm LOW for 5ms
+                time.sleep(0.005)
+                if GPIO.input(reaction_btn) == GPIO.LOW:
                     press_ms = ms()
                     with data_lock:
                         loff = lights_off_time
