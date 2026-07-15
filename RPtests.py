@@ -133,13 +133,11 @@ GPIO.output(TRACK2_OBST_LED, LED_OFF)
 # Master button is NO (Normally Open) — pulls LOW when pressed
 GPIO.setup(MASTER_BUTTON, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-# Reaction buttons are NC limit switches (Normally Closed):
-# Idle/loaded  = switch CLOSED = reads LOW
-# Fired/triggered = switch OPENS = reads HIGH
-# Use PUD_DOWN so the pin is pulled LOW when switch opens
+# Reaction buttons — NC limit switches with external pull resistors
+# PUD_OFF: no internal pull, using external resistors only
 REACTION_TRIGGERED = GPIO.HIGH   # NC switch opens when launcher fires
-GPIO.setup(REACTION_BTN_P1, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-GPIO.setup(REACTION_BTN_P2, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+GPIO.setup(REACTION_BTN_P1, GPIO.IN, pull_up_down=GPIO.PUD_OFF)
+GPIO.setup(REACTION_BTN_P2, GPIO.IN, pull_up_down=GPIO.PUD_OFF)
 
 # IR sensor modules have their own pull-up resistors on the board.
 # Disabling Pi's internal pull-up avoids voltage conflict (3.7V issue).
