@@ -3,7 +3,7 @@
 ╔══════════════════════════════════════════════════════════╗
 ║       RACE PAKISTAN – F1 TIMING SYSTEM                ║
 ║       Raspberry Pi 4B – Complete Standalone Version      ║
-║       NUVEX × Race Pakistan  © 2025                   ║
+║       NUVEX × Race Pakistan  © 2026                   ║
 ╚══════════════════════════════════════════════════════════╝
 
 HOW TO RUN:
@@ -299,25 +299,41 @@ def track_thread(player_id, reaction_btn, start_pin, start_clear,
         start_time    = None
 
         # ── STEP 1: Reaction button ────────────────────
-        # Wait briefly to let pins settle after lights out
-        time.sleep(0.05)
+        # Wait for launcher to be in FIRED state (switch OPEN = LOW)
+        # before listening for trigger. This prevents false trigger
+        # if launcher is still loaded (switch CLOSED = HIGH) at race start.
+        settle_deadline = ms() + 5_000
+        while ms() < settle_deadline:
+            if GPIO.input(reaction_btn) != REACTION_TRIGGERED:
+                break   # switch is open = launcher ready/fired position
+            time.sleep(0.005)
 
-        deadline = ms() + 30_000
-        while ms() < deadline:
+        # Now wait for launcher to LOAD and FIRE (switch closes then opens)
+        # First wait for switch to CLOSE (loaded = HIGH)
+        load_deadline = ms() + 30_000
+        while ms() < load_deadline:
             if GPIO.input(reaction_btn) == REACTION_TRIGGERED:
-                # Debounce — confirm it stays HIGH for 10ms
+                break   # launcher loaded
+            with data_lock:
+                s = race_state
+            if s != STATE_IN_PROGRESS:
+                break
+            time.sleep(0.004)
+
+        # Now wait for switch to OPEN (fired = LOW) → this is the reaction moment
+        fire_deadline = ms() + 30_000
+        while ms() < fire_deadline:
+            if GPIO.input(reaction_btn) != REACTION_TRIGGERED:
+                # Debounce — confirm LOW stays for 10ms
                 time.sleep(0.01)
                 if GPIO.input(reaction_btn) != REACTION_TRIGGERED:
-                    continue   # was noise, ignore
-                press_ms = ms()
-                with data_lock:
-                    loff = lights_off_time
-                if loff is not None:
-                    reaction_time = max(0, press_ms - loff)
-                print(f"[Player {player_id}] Reaction = {reaction_time} ms")
-                while GPIO.input(reaction_btn) == REACTION_TRIGGERED:
-                    time.sleep(0.005)
-                break
+                    press_ms = ms()
+                    with data_lock:
+                        loff = lights_off_time
+                    if loff is not None:
+                        reaction_time = max(0, press_ms - loff)
+                    print(f"[Player {player_id}] Reaction = {reaction_time} ms")
+                    break
             with data_lock:
                 s = race_state
             if s != STATE_IN_PROGRESS:
