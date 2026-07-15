@@ -3,7 +3,7 @@
 ╔══════════════════════════════════════════════════════════╗
 ║       RACE PAKISTAN – F1 TIMING SYSTEM                ║
 ║       Raspberry Pi 4B – Complete Standalone Version      ║
-║       NUVEX × Race Pakistan  © 2025                   ║
+║       NUVEX × Race Pakistan  © 2026                   ║
 ╚══════════════════════════════════════════════════════════╝
 
 HOW TO RUN:
@@ -299,9 +299,16 @@ def track_thread(player_id, reaction_btn, start_pin, start_clear,
         start_time    = None
 
         # ── STEP 1: Reaction button ────────────────────
+        # Wait briefly to let pins settle after lights out
+        time.sleep(0.05)
+
         deadline = ms() + 30_000
         while ms() < deadline:
             if GPIO.input(reaction_btn) == REACTION_TRIGGERED:
+                # Debounce — confirm it stays HIGH for 10ms
+                time.sleep(0.01)
+                if GPIO.input(reaction_btn) != REACTION_TRIGGERED:
+                    continue   # was noise, ignore
                 press_ms = ms()
                 with data_lock:
                     loff = lights_off_time
