@@ -139,11 +139,10 @@ REACTION_TRIGGERED = GPIO.HIGH   # NC switch opens when launcher fires
 GPIO.setup(REACTION_BTN_P1, GPIO.IN, pull_up_down=GPIO.PUD_OFF)
 GPIO.setup(REACTION_BTN_P2, GPIO.IN, pull_up_down=GPIO.PUD_OFF)
 
-# IR sensor modules have their own pull-up resistors on the board.
-# Disabling Pi's internal pull-up avoids voltage conflict (3.7V issue).
+# IR sensor modules — use PUD_DOWN to ensure consistent LOW when clear
 IR_PINS = [TRACK1_START, TRACK1_END, TRACK2_START, TRACK2_END]
 for pin in IR_PINS:
-    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_OFF)
+    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
 
 # ══════════════════════════════════════════════
 #  RACE STATES
