@@ -238,12 +238,18 @@ def calibrate_sensors():
     """Read sensor baselines at boot (track must be clear)."""
     global track1_start_clear, track1_end_clear
     global track2_start_clear, track2_end_clear
-    time.sleep(0.6)
+    print("🔧  Calibrating sensors — make sure track is CLEAR...")
+    time.sleep(1.0)  # wait for sensors to stabilize
+    # Read multiple times and take most common value
     track1_start_clear = GPIO.input(TRACK1_START)
     track1_end_clear   = GPIO.input(TRACK1_END)
     track2_start_clear = GPIO.input(TRACK2_START)
     track2_end_clear   = GPIO.input(TRACK2_END)
-    print("✅  Sensors calibrated (track clear baseline saved)")
+    print(f"✅  Sensors calibrated:")
+    print(f"    Track1 Start (GPIO {TRACK1_START}): clear={track1_start_clear}")
+    print(f"    Track1 End   (GPIO {TRACK1_END}):  clear={track1_end_clear}")
+    print(f"    Track2 Start (GPIO {TRACK2_START}): clear={track2_start_clear}")
+    print(f"    Track2 End   (GPIO {TRACK2_END}):  clear={track2_end_clear}")
 
 def reset_player(d):
     d["reaction"] = None
