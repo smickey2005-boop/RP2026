@@ -397,7 +397,7 @@ body::after{{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 header{{display:flex;justify-content:space-between;align-items:center;padding:16px 5vw;position:relative;background:linear-gradient(180deg,#2a0b22 0%,rgba(19,5,15,0) 100%)}}
 header::after{{content:'';position:absolute;left:0;right:0;bottom:0;height:3px;background:linear-gradient(90deg,var(--crimson),var(--orange),var(--amber),var(--orange),var(--crimson))}}
 .logo-rp{{display:flex;align-items:center;justify-content:flex-start;flex:1 1 0;max-width:220px}}
-.logo-rp img{{height:40px;width:auto;object-fit:contain}}
+.logo-rp img{{height:40px;width:auto;object-fit:contain;mix-blend-mode:screen;}}
 header h1{{font-family:var(--display);font-size:clamp(18px,3vw,34px);letter-spacing:2px;text-align:center;line-height:1.4;color:var(--text);flex:0 0 auto}}
 .logo-nuvex{{display:flex;align-items:center;justify-content:flex-end;flex:1 1 0;max-width:220px}}
 .logo-nuvex img{{height:34px;width:auto;max-width:100%;object-fit:contain}}
@@ -417,6 +417,18 @@ header h1{{font-family:var(--display);font-size:clamp(18px,3vw,34px);letter-spac
 .card h2{{font-family:var(--display);font-size:clamp(16px,2.1vw,24px);letter-spacing:3px;color:var(--orange);margin-bottom:22px;text-transform:uppercase}}
 .stat{{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--line-soft)}}
 .stat:last-child{{border-bottom:none}}
+</style>
+</head>
+<body>
+<header>
+    <div class="logo-rp">
+        <img src="{_RP_LOGO}" alt="Race Pakistan Logo">
+    </div>
+    <h1>Race Pakistan – F1 Timing</h1>
+    <div class="logo-nuvex">
+        <!-- Nuvex logo image if needed -->
+    </div>
+</header>
 .lbl{{font-family:var(--body);font-size:clamp(11px,1.3vw,14px);font-weight:600;letter-spacing:2px;color:var(--muted);text-transform:uppercase}}
 .val{{font-family:var(--display);font-size:clamp(22px,2.9vw,34px);letter-spacing:1px;color:var(--amber);font-variant-numeric:tabular-nums;line-height:1}}
 .val.dim{{color:#4a3342;font-size:clamp(16px,2vw,24px)}}
