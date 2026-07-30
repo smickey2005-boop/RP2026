@@ -28,12 +28,12 @@ GPIO WIRING:
     Player 2 → GPIO 22  →  Button  →  GND
 
   TRACK 1 (Player 1) — also used for obstacle detection:
-    Start IR  →  GPIO 26   (active LOW = car/obstacle present)
+    Start IR  →  GPIO 8   (active LOW = car/obstacle present)
     End IR    →  GPIO 6    (active LOW = car/obstacle present)
 
   TRACK 2 (Player 2) — also used for obstacle detection:
     Start IR  →  GPIO 23   (active LOW = car/obstacle present)
-    End IR    →  GPIO 25   (active LOW = car/obstacle present)
+    End IR    →  GPIO 24   (active LOW = car/obstacle present)
 
   STATUS LED:
     GPIO 13  →  220Ω  →  LED  →  GND
@@ -85,13 +85,12 @@ REACTION_BTN_P1  = 27                  # Player 1 reaction button
 REACTION_BTN_P2  = 22                  # Player 2 reaction button
 
 # Track sensors — ALSO used for obstacle detection before race
-TRACK1_START     = 26                  # Player 1 – start IR sensor
+TRACK1_START     = 8                  # Player 1 – start IR sensor
 TRACK1_END       = 6                   # Player 1 – end IR sensor
 TRACK2_START     = 23                  # Player 2 – start IR sensor
-TRACK2_END       = 25                  # Player 2 – end IR sensor
+TRACK2_END       = 20                  # Player 2 – end IR sensor
 
 STATUS_LED       = 13                  # Status LED — ON during race
-HOTSPOT_LED      = 7                   # Hotspot indicator LED
 
 # Per-track obstacle indicator LEDs
 TRACK1_OBST_LED  = 12                  # Player 1 – obstacle LED
@@ -122,9 +121,6 @@ for pin in LED_PINS:
 GPIO.setup(STATUS_LED, GPIO.OUT)
 GPIO.output(STATUS_LED, LED_OFF)   # OFF at boot
 
-GPIO.setup(HOTSPOT_LED, GPIO.OUT)
-GPIO.output(HOTSPOT_LED, LED_OFF)
-
 GPIO.setup(TRACK1_OBST_LED, GPIO.OUT)
 GPIO.output(TRACK1_OBST_LED, LED_OFF)
 GPIO.setup(TRACK2_OBST_LED, GPIO.OUT)
@@ -139,11 +135,13 @@ REACTION_TRIGGERED = GPIO.HIGH   # NC switch opens when launcher fires
 GPIO.setup(REACTION_BTN_P1, GPIO.IN, pull_up_down=GPIO.PUD_OFF)
 GPIO.setup(REACTION_BTN_P2, GPIO.IN, pull_up_down=GPIO.PUD_OFF)
 
-# IR sensor modules — use PUD_DOWN to ensure consistent LOW when clear
-IR_PINS = [TRACK1_START, TRACK1_END, TRACK2_START, TRACK2_END]
-for pin in IR_PINS:
-    GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
-
+# IR sensor modules have their own pull-up resistors on the board.
+# IR sensors — individual pull settings based on sensor polarity
+# IR sensor modules — individual pull settings based on sensor behavior
+GPIO.setup(TRACK1_START, GPIO.IN, pull_up_down=GPIO.PUD_OFF)  # has own pull
+GPIO.setup(TRACK1_END,   GPIO.IN, pull_up_down=GPIO.PUD_OFF)  # has own pull
+GPIO.setup(TRACK2_START, GPIO.IN, pull_up_down=GPIO.PUD_OFF)  # has own pull
+GPIO.setup(TRACK2_END,   GPIO.IN, pull_up_down=GPIO.PUD_UP)   # floats LOW — needs pull-up
 # ══════════════════════════════════════════════
 #  RACE STATES
 # ══════════════════════════════════════════════
@@ -216,39 +214,16 @@ def obstacle_led_thread():
             GPIO.output(TRACK2_OBST_LED, LED_OFF)
         time.sleep(0.05)
 
-def hotspot_led_thread():
-    """Turns HOTSPOT_LED ON when ap0 has 192.168.4.1, OFF when down."""
-    import subprocess
-    while True:
-        try:
-            result = subprocess.run(
-                ["ip", "addr", "show", "ap0"],
-                capture_output=True, text=True
-            )
-            if "192.168.4.1" in result.stdout:
-                GPIO.output(HOTSPOT_LED, LED_ON)
-            else:
-                GPIO.output(HOTSPOT_LED, LED_OFF)
-        except Exception:
-            GPIO.output(HOTSPOT_LED, LED_OFF)
-        time.sleep(5)
-
 def calibrate_sensors():
     """Read sensor baselines at boot (track must be clear)."""
     global track1_start_clear, track1_end_clear
     global track2_start_clear, track2_end_clear
-    print("🔧  Calibrating sensors — make sure track is CLEAR...")
-    time.sleep(1.0)  # wait for sensors to stabilize
-    # Read multiple times and take most common value
+    time.sleep(0.6)
     track1_start_clear = GPIO.input(TRACK1_START)
     track1_end_clear   = GPIO.input(TRACK1_END)
     track2_start_clear = GPIO.input(TRACK2_START)
     track2_end_clear   = GPIO.input(TRACK2_END)
-    print(f"✅  Sensors calibrated:")
-    print(f"    Track1 Start (GPIO {TRACK1_START}): clear={track1_start_clear}")
-    print(f"    Track1 End   (GPIO {TRACK1_END}):  clear={track1_end_clear}")
-    print(f"    Track2 Start (GPIO {TRACK2_START}): clear={track2_start_clear}")
-    print(f"    Track2 End   (GPIO {TRACK2_END}):  clear={track2_end_clear}")
+    print("✅  Sensors calibrated (track clear baseline saved)")
 
 def reset_player(d):
     d["reaction"] = None
@@ -673,7 +648,6 @@ def main():
 
     threading.Thread(target=start_web_server,    daemon=True).start()
     threading.Thread(target=obstacle_led_thread, daemon=True).start()
-    threading.Thread(target=hotspot_led_thread,  daemon=True).start()
 
     threading.Thread(
         target=track_thread,
@@ -798,7 +772,6 @@ def main():
         for pin in LED_PINS:
             GPIO.output(pin, LED_OFF)
         GPIO.output(STATUS_LED,      LED_OFF)
-        GPIO.output(HOTSPOT_LED,     LED_OFF)
         GPIO.output(TRACK1_OBST_LED, LED_OFF)
         GPIO.output(TRACK2_OBST_LED, LED_OFF)
         GPIO.cleanup()
