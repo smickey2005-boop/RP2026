@@ -417,18 +417,6 @@ header h1{{font-family:var(--display);font-size:clamp(18px,3vw,34px);letter-spac
 .card h2{{font-family:var(--display);font-size:clamp(16px,2.1vw,24px);letter-spacing:3px;color:var(--orange);margin-bottom:22px;text-transform:uppercase}}
 .stat{{display:flex;justify-content:space-between;align-items:center;padding:13px 0;border-bottom:1px solid var(--line-soft)}}
 .stat:last-child{{border-bottom:none}}
-</style>
-</head>
-<body>
-<header>
-    <div class="logo-rp">
-        <img src="{_RP_LOGO}" alt="Race Pakistan Logo">
-    </div>
-    <h1>Race Pakistan – F1 Timing</h1>
-    <div class="logo-nuvex">
-        <!-- Nuvex logo image if needed -->
-    </div>
-</header>
 .lbl{{font-family:var(--body);font-size:clamp(11px,1.3vw,14px);font-weight:600;letter-spacing:2px;color:var(--muted);text-transform:uppercase}}
 .val{{font-family:var(--display);font-size:clamp(22px,2.9vw,34px);letter-spacing:1px;color:var(--amber);font-variant-numeric:tabular-nums;line-height:1}}
 .val.dim{{color:#4a3342;font-size:clamp(16px,2vw,24px)}}
